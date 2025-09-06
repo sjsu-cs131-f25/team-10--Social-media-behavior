@@ -2,8 +2,8 @@
 Social media behavior analysis
 
 ## Authors
-Team Name: The Tag Team (TTT)
-Team Members:
+Team Name: The Tag Team (TTT)  
+Team Members:  
 Trey C. – Product Manager (Sprint 1).  
 Hien T. L. – Data Engineer (Sprint 1).  
 Richa V. – Data Engineer (Sprint 1).  
