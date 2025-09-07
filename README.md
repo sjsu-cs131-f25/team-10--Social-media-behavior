@@ -1,14 +1,17 @@
 ## Project Title:
-Social media behavior analysis
+Youtube Comment Sentiment Analysis
 
 ## Authors
 Team Name: The Tag Team (TTT)  
+Team Motto: It's T Time
 Team Members:  
-Trey C. – Product Manager (Sprint 1).  
-Hien T. L. – Data Engineer (Sprint 1).  
-Richa V. – Data Engineer (Sprint 1).  
-Karmehr A. – Data Engineer (Sprint 1).  
-Jacob A. – Data Storyteller (Sprint 1).  
+Trey C.
+Hien T.
+Richa V.
+Karmehr A.
+Jacob A.
 
 ## Dataset Description:
-A dataset conducted using comments on Youtube taken from Youtube API. The comments are taken from 10 videos per channel we look at.
+A dataset collected from comments on Youtube using the Youtube API. All comments data is collected from 10 videos per channel we choose until 100k rows of data are collected.
+Columns of data collected will include the following:
+Columns: video_id, video_title, channel_id, channel_title, comment_id, author_display_name, author_channel_id, comment_text, like_count, published_at, updated_at, reply_count, is_reply, parent_comment_id, video_published_at, language_detected
