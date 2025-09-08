@@ -12,6 +12,4 @@ Karmehr A.
 Jacob A.
 
 ## Dataset Description:
-A dataset collected from comments on Youtube using the Youtube API. All comments data is collected from 10 videos per channel we choose until 100k rows of data are collected.
-Columns of data collected will include the following:
-Columns: video_id, video_title, channel_id, channel_title, comment_id, author_display_name, author_channel_id, comment_text, like_count, published_at, updated_at, reply_count, is_reply, parent_comment_id, video_published_at, language_detected
+A dataset collected from comments on Youtube using the Youtube API. We are using a dataset with 372,000 rows from Kaggle containing a variety of youtube comments from various videos. Columns included are: video_id, comment_text, likes, replies as well as video_id, title, channel_title, category_id, tags, views, likes, dislikes, comment total, and thumbnail link
