@@ -7,13 +7,15 @@ import googleapiclient.errors
 
 from googleapiclient.discovery import build
 
-import requests, sys, time, os, argparse
+import os
+
+import csv
 
 # Globals
 api_service_name = "youtube"
 api_version = "v3"
 load_dotenv()
-api_key = os.getenv('key')
+api_key = os.getenv('api_key')
 global youtube
 youtube = build(api_service_name, api_version, developerKey=api_key)
 
@@ -32,81 +34,147 @@ next task is finding a good way to collect a batch of videos for each playlist..
 
 # grabbing channels by their '@' handle may be the easiest if we have a predefined list of channels we want
 def getChannel():
-    channel_Id = []
+    channel_Id = {}
     with open('data/channels.txt', 'r') as channels:
         for channel in channels:
+            handle = channel.strip()
+            if not handle:
+                continue
             try:
                 request = youtube.channels().list(
-                part="snippet,contentDetails,statistics",
-                forHandle=channel
+                    part="snippet,contentDetails,statistics",
+                    forHandle=handle
                 )
                 response = request.execute()
-            
-                channel_Id.append(response['items'][0]['contentDetails']['relatedPlaylists']['uploads'])
-            except:
-                print(channel + " not found")
+                if response['items']:
+                    channel_Id[handle] = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+                else:
+                    print(f"No channel found for handle: {handle}")
+            except Exception as e:
+                print(f"Error for {handle}: {e}")
                 continue
-            
     return channel_Id
 
-# @TODO grab a batch of videos for each playlist then grab <= 100 comment threads per video
-def getTen(playlist, batch):
-    videos = []
-    for video in range(batch):
-        videos.append(video)
-    return videos
-
 # note: cost of this operation is 100 units of the alloted 10,000 units per 24 hours
-def getVideos(topic):
-    playlists = getChannel()
-    
-    for playlist in playlists:
-        vids_Added = 0
-        
-        if vids_Added == 10:
-            vids_Added = 10
-            current += 1
-        
-        
-        request = youtube.search().list(
-            part="id,snippet",
-            maxResults=5,
-            q=topic
-        )
-    return request.execute()
-
-# collect & save videoIDs
-def populateVideoIDs(videos):
-    videoIDs = []
-    for video in videos:
-        if('videoId' in video['id']):
-            videoIDs.append(video['id']['videoId'])
-    return videoIDs
-
-# @TODO change method to fit our needs
-def collectVideoData(videos):
-    collection_of_video_data = {}
-    for video in videos:
-        if('videoId' in video['id']):
-            request = youtube.videos().list(part = 'snippet, statistics', id = video['id']['videoId'])
-            response = request.execute()
-            collection_of_video_data[video['id']['videoId']] = response
-    return collection_of_video_data
-
-# call api to collect data per comment thread
-def collectVideoComment(videos):
-    
-    for video in videos:
-        if('videoId' in video['id']):
-            request = youtube.commentThreads().list(
-                part="snippet,replies",
-                maxResults=5,
-                order="time",
-                textFormat="html",
-                videoId="_VB39Jo8mAQ"
+def getVideoIDsFromPlaylist(playlist_id, max_results=10):
+    video_ids = []
+    nextPageToken = None
+    while len(video_ids) < max_results:
+        try:
+            request = youtube.playlistItems().list(
+                part="contentDetails",
+                playlistId=playlist_id,
+                maxResults=min(50, max_results - len(video_ids)),
+                pageToken=nextPageToken
             )
             response = request.execute()
-    return response
+            for item in response.get('items', []):
+                video_id = item['contentDetails']['videoId']
+                video_ids.append(video_id)
+            nextPageToken = response.get('nextPageToken')
+            if not nextPageToken:
+                break
+        except Exception as e:
+            print(f"Error fetching videos from playlist {playlist_id}: {e}")
+            break
+    return video_ids
+
+# Collect comments for each video and write to CSV
+def load_ids_from_csv(csv_path, id_col):
+    ids = set()
+    if not os.path.exists(csv_path):
+        return ids
+    with open(csv_path, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            ids.add(row[id_col])
+    return ids
+
+def save_ids_to_csv(csv_path, ids, header):
+    mode = 'a' if os.path.exists(csv_path) else 'w'
+    with open(csv_path, mode, newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        if mode == 'w':
+            writer.writerow(header)
+        for id_val in ids:
+            writer.writerow([id_val])
+
+def collect_and_write_comments(video_ids, csv_path='data/yt_comments.csv', video_log='data/collected_videos.csv', comment_log='data/collected_comments.csv'):
+    collected_videos = load_ids_from_csv(video_log, 'video_id')
+    collected_comments = load_ids_from_csv(comment_log, 'comment_id')
+    new_videos = set()
+    new_comments = set()
+    with open(csv_path, 'a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        # Write header if file is empty
+        if csvfile.tell() == 0:
+            writer.writerow([
+                'video_id', 'comment_id', 'author_display_name', 'published_at',
+                'like_count', 'comment_text', 'is_reply', 'parent_id', 'channel_id'
+            ])
+        for video_id in video_ids:
+            if video_id in collected_videos:
+                print(f"Skipping already collected video: {video_id}")
+                continue
+            nextPageToken = None
+            while True:
+                try:
+                    request = youtube.commentThreads().list(
+                        part="snippet,replies",
+                        maxResults=100,
+                        order="time",
+                        textFormat="plainText",
+                        videoId=video_id,
+                        pageToken=nextPageToken
+                    )
+                    response = request.execute()
+                    for item in response.get('items', []):
+                        comment_id = item['id']
+                        if comment_id in collected_comments:
+                            continue
+                        snippet = item['snippet']['topLevelComment']['snippet']
+                        writer.writerow([
+                            video_id,
+                            comment_id,
+                            snippet.get('authorDisplayName', ''),
+                            snippet.get('publishedAt', ''),
+                            snippet.get('likeCount', 0),
+                            snippet.get('textDisplay', ''),
+                            0, # is_reply (top-level)
+                            '', # parent_id
+                            snippet.get('authorChannelId', {}).get('value', '')
+                        ])
+                        new_comments.add(comment_id)
+                        # Write replies if present
+                        for reply in item.get('replies', {}).get('comments', []):
+                            reply_id = reply['id']
+                            if reply_id in collected_comments:
+                                continue
+                            reply_snippet = reply['snippet']
+                            writer.writerow([
+                                video_id,
+                                reply_id,
+                                reply_snippet.get('authorDisplayName', ''),
+                                reply_snippet.get('publishedAt', ''),
+                                reply_snippet.get('likeCount', 0),
+                                reply_snippet.get('textDisplay', ''),
+                                1, # is_reply
+                                reply_snippet.get('parentId', ''),
+                                reply_snippet.get('authorChannelId', {}).get('value', '')
+                            ])
+                            new_comments.add(reply_id)
+                    nextPageToken = response.get('nextPageToken')
+                    if not nextPageToken:
+                        break
+                except Exception as e:
+                    print(f"Error fetching comments for video {video_id}: {e}")
+                    break
+            new_videos.add(video_id)
+    # Save new video and comment IDs
+    if new_videos:
+        save_ids_to_csv(video_log, new_videos, ['video_id'])
+    if new_comments:
+        save_ids_to_csv(comment_log, new_comments, ['comment_id'])
 
 def testAPI():
     request = youtube.channels().list(
@@ -123,10 +191,16 @@ def testAPI():
     except:
         print('\n\n\n' + 'REQUEST FAILED' + '\n\n\n')
         
+
 def main():
-    
-    print(getChannel())
-    return
+    # Full workflow: get channels, get videos, get comments
+    channels = getChannel()
+    for handle, playlist_id in channels.items():
+        print(f"Processing channel: {handle}")
+        video_ids = getVideoIDsFromPlaylist(playlist_id, max_results=10)
+        print(f"  Found {len(video_ids)} videos.")
+        collect_and_write_comments(video_ids)
+    print("Done collecting comments.")
 
 if __name__ == "__main__":
     main()
