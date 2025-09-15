@@ -214,3 +214,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+# Big data out of repo
+data/*.csv
+data/*.csv.gz
+data/*.zip
+data/*.tsv
+# Keep tiny samples folder
+!data/samples/
